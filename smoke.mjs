@@ -53,8 +53,7 @@ function realpathOrNull(path) {
   }
 }
 
-/** The substitution install.sh performs with sed. */
-function render(path) {
+function renderForDshHome(path) {
   const text = readText(path)
   return text === null ? null : text.split('{{DSH_HOME}}').join(DSH_HOME)
 }
@@ -144,7 +143,7 @@ function checkSkillLinks(expected) {
 
 function checkAdapter() {
   const installed = join(DSH_HOME, 'adapter', 'dsh.md')
-  const expected = render(ADAPTER_IN)
+  const expected = renderForDshHome(ADAPTER_IN)
   if (expected === null) {
     fail(`adapter template ${ADAPTER_IN}: missing; restore it from git`)
     return
@@ -161,7 +160,7 @@ function checkAdapter() {
 
 function checkAgentsBlock() {
   const path = join(DSH_HOME, 'AGENTS.md')
-  const expected = render(FRAGMENT_IN)
+  const expected = renderForDshHome(FRAGMENT_IN)
   if (expected === null) {
     fail(`AGENTS fragment ${FRAGMENT_IN}: missing; restore it from git`)
     return
