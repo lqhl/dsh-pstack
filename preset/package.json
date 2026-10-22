@@ -1,0 +1,14 @@
+{
+  "name": "@lqhl/dsh-pstack",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Agent presets for running pstack (poteto mode) inside DeepSeek Harness",
+  "license": "MIT",
+  "dsh": {
+    "manifestVersion": 1,
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

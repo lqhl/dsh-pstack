@@ -1,0 +1,35 @@
+<!-- pstack:begin -->
+# pstack
+
+pstack lives at {{DSH_HOME}}/pstack (vendored from cursor/plugins, MIT). It is opt-in per message.
+
+When the user starts a message with `/poteto-mode`, or asks for pstack, read {{DSH_HOME}}/adapter/dsh.md once,
+then read {{DSH_HOME}}/skills/poteto-mode/SKILL.md in full and follow it, including its Principles index and
+its playbooks. Resolve every relative path in those files against the skill's own directory. Selecting the
+`pstack` agent preset does the same thing without the slash command.
+
+Subagent model aliases for pstack roles (never pass a Cursor slug to DSH):
+
+    deepseek = magpie / deepseek/deepseek-flash / max
+    gpt      = magpie-responses / codex/gpt-6.1-sol / medium
+    inherit-parent or auto = omit provider and model
+
+# budget: custom (deepseek max, gpt medium)
+feature, refactoring: deepseek
+bug-fix: deepseek
+perf-issue: deepseek
+hillclimb: deepseek
+judgment and prose: gpt
+hardest tasks: gpt
+swarm workers: deepseek
+how explorer: deepseek
+how explainer: gpt
+why investigators: deepseek
+why synthesizer: gpt
+reflect tooling: deepseek
+reflect judgment, divergent, synthesizer: gpt
+arena runners: deepseek, gpt
+arena cross-judge pool: gpt, deepseek
+architect runners: gpt, deepseek
+interrogate reviewers: gpt, deepseek
+<!-- pstack:end -->

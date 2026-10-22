@@ -1,0 +1,136 @@
+# pstack in DSH
+
+Read this file once per session, before the first skill step. It translates the Cursor names that pstack
+skills use into DSH tools.
+
+`<pstack>` is `{{DSH_HOME}}/pstack`. Every relative path inside a skill resolves against that skill's own
+directory (`<pstack>/skills/<name>/`), never against the session working directory.
+
+If a name has no row here, do not guess silently: use the closest row, say which mapping you assumed in one
+line, and continue.
+
+Router check: the `subagent` tool exposes `provider`, `model`, and `reasoning_effort` only when the Host has
+subagent model selection enabled. If those fields are absent, model routing is off. Say so once in the
+session, run every role on the parent route, and keep going. Never invent a model id.
+
+## Tools
+
+| Cursor | DSH |
+| --- | --- |
+| `Task` | `subagent`. It returns a child id immediately and notifies you when the child settles. |
+| `AskQuestion` | `ask_user_question` |
+| Open a todolist | `todo_write`. Its first items are the playbook's steps, copied verbatim. |
+| `subagent_type: generalPurpose` | `subagent` with no `agent_preset`. |
+| `subagent_type: poteto-agent` | `subagent` with `agent_preset: poteto-agent`. |
+| `subagent_type: comment-sicko` | `subagent` with `agent_preset: comment-sicko`. |
+| Run another pstack skill (`/name`, or "the **name** skill") | `read <pstack>/skills/<name>/SKILL.md`, then follow it. Leaf skills stay out of your catalog on purpose. |
+| `Grep`, `Glob` | `grep`, `glob` |
+| `Read` | `read` |
+| A Cursor cloud agent as a worker | `git worktree add` through bash, then pass its path as `cwd`. |
+
+## Subagent fields
+
+| Cursor | DSH |
+| --- | --- |
+| `readonly: true` | `agent_preset: readonly-worker`. Its preset drops bash and the persona forbids writes. Run `git status` before you accept its report. |
+| `readonly: false` | Omit `agent_preset`. |
+| `environment: "cloud"` | Create a worktree first and pass its path as `cwd`. |
+| `environment: "local"` | Omit `cwd`. |
+| `cloud_base_branch: <b>` | Tell the child to check out `<b>` before it starts. |
+| `run_in_background: true` | Omit. DSH children always run in the background. |
+| `resume` | `send_message` while the child is alive. Once it settles, spawn a fresh child and paste the earlier report into its brief. |
+| `file_attachments` | List the absolute paths in the brief. |
+
+Depth: a child of `poteto-agent` cannot delegate further, because that preset mounts no delegation tool.
+That is deliberate. The child owns the diff itself, which is what the playbooks ask for anyway.
+
+## Models
+
+Two aliases cover every pstack slug. Never pass a Cursor slug as a DSH model id.
+
+| alias | provider | model | reasoning_effort |
+| --- | --- | --- | --- |
+| `deepseek` (code) | `magpie` | `deepseek/deepseek-flash` | `max` |
+| `gpt` (judgment, prose, panels) | `magpie-responses` | `codex/gpt-6.1-sol` | `medium` |
+
+| pstack slug | alias |
+| --- | --- |
+| `claude-*`, such as `claude-opus-5-5-xhigh` | `gpt` |
+| `gpt-*` | `gpt` |
+| `grok-*`, `composer-*`, `cursor-grok-*` | `deepseek` |
+| `deepseek-*` | `deepseek` |
+| `inherit-parent` or `auto` | omit `provider` and `model`, so the child joins the parent route |
+
+The effort suffix in a slug (`-xhigh`, `-fast`, `-medium`) does not change the alias's effort. The alias
+defaults above are the budget. To raise one role, edit its line in `{{DSH_HOME}}/AGENTS.md`, not the slug.
+That file is the equivalent of `~/.cursor/rules/pstack-models.mdc`, and it is the only place role models live.
+
+## setup-pstack
+
+Write the rule into `{{DSH_HOME}}/AGENTS.md`, between `<!-- pstack:begin -->` and `<!-- pstack:end -->`.
+Never write a `.mdc` file, and never touch the rest of that file.
+
+Keep the comment lines, the `# budget` line, and one line per role, using the aliases above:
+
+```
+# budget: custom (deepseek max, gpt medium)
+feature, refactoring: deepseek
+bug-fix: deepseek
+perf-issue: deepseek
+hillclimb: deepseek
+judgment and prose: gpt
+hardest tasks: gpt
+swarm workers: deepseek
+how explorer: deepseek
+how explainer: gpt
+why investigators: deepseek
+why synthesizer: gpt
+reflect tooling: deepseek
+reflect judgment, divergent, synthesizer: gpt
+arena runners: deepseek, gpt
+arena cross-judge pool: gpt, deepseek
+architect runners: gpt, deepseek
+interrogate reviewers: gpt, deepseek
+```
+
+Detect available routes with `list_subagent_models` when it exists. Otherwise read the alias table above and
+write those two aliases only. A role line naming an alias that the table does not define is a setup error:
+report it and fall back to the skill default.
+
+## Paths
+
+| Cursor | DSH |
+| --- | --- |
+| `.cursor/skills/`, `~/.cursor/skills/` | `.dsh/skills/` in a project, `~/.dsh/skills/` for personal skills |
+| `~/.cursor/plugins/`, `.cursor-plugin/plugin.json` | `<pstack>` |
+| `~/.cursor/rules/*.mdc`, an always-applied rule | `~/.dsh/AGENTS.md` |
+| `https://github.com/cursor/plugins/blob/main/pstack/<path>` | `<pstack>/<path>`. Read the local copy; never fetch it. |
+| `agent-transcripts/`, `~/.cursor/projects/<slug>/` | `session_query` tools when mounted. Otherwise ask the user to paste the turn you need. |
+
+## DSH-specific moves
+
+- **Panels.** When a skill says to spawn N candidates or reviewers on different models, use the `workflow`
+  tool and give each `agent()` call its own `provider` and `model`. One parent call, N children, no parent
+  context cost.
+- **Loop.** `/loop until <predicate>` becomes `create_goal` for the predicate plus `schedule_create` for the
+  heartbeat. Never write a shell `while` loop around the predicate.
+- **Todos.** Use `todo_write` for the playbook checklist, one item per step, and keep it current.
+- **Plan mode.** `exit_plan_mode` replaces "write the plan in the reply and wait". Use it only when the user
+  asked for a plan first.
+
+## Cursor-only features
+
+DSH has no Cursor Automations, Bugbot, Cursor cloud agents, custom modes, `/loop`, `/create-skill`, or
+`cursor-team-kit` (`deslop`, `control-ui`, `control-cli`). When a step needs one, reply one line
+`Skipped in DSH: <step>. <reason>.` and continue with the next step. Never stop, ask, or retry. When a later
+step needs what the skipped step produced, such as a URL or a key, leave a placeholder and name it in that
+line.
+
+| Cursor | DSH |
+| --- | --- |
+| Cursor Automations: routines, `update_state` calls, `api2.cursor.sh/automations` webhooks, routine wakes, `SendToUser` | Skip. The replacement is a cron plus `dsh headless`, and it is out of scope for a single session. |
+| Bugbot | Its comments on a PR are ordinary review threads. Triage them with the forge command the step names. Skip steps that start, wait for, or configure Bugbot when the PR has no such check or comment. |
+| Cursor cloud agents | Use a worktree, as in Subagent fields. Skip dashboard or remote-machine steps. |
+| `cursor-team-kit`: `deslop`, `control-ui`, `control-cli` | `deslop` → `unslop`. `control-*` → the repo's own `verify-*` skill, which `create-verification-skill` generates. |
+| Custom modes (Option+Enter to keep a mode on) | Select the `pstack` agent preset for the session instead. It already carries poteto mode. |
+| A built-in PR tool | Use `gh` through bash. That is not a skip, so write no line. |
