@@ -16,8 +16,9 @@ pstack 是 poteto（Lauren Tan）的一组 agent 工作流 skill：先想清楚�
 ├── preset/check.mjs       检查 C 项：线上 standard preset 是否变了
 ├── preset/cordis.patch.yml 生成物：4 个 agent preset
 ├── agents-fragment.md.in  注入 ~/.dsh/AGENTS.md 的段落（模型角色表）
+├── smoke.mjs              安装态检查：稳定路径 / 软链 / 渲染结果 / preset 行
 ├── install.sh             建软链、渲染 adapter、注入 AGENTS.md
-└── Makefile               make / check / install / sync / baseline / preset
+└── Makefile               make / check / install / smoke / sync / baseline / preset
 ```
 
 ## 安装
@@ -65,9 +66,12 @@ plugin_manager action=install_bundle target=<本仓库>/preset
 make sync        # 拉上游 main，更新 vendor/pstack + vendor/UPSTREAM，然后跑 check
 make check       # A 词汇覆盖 / B 模型家族 / C skill 完整性
 make check-preset# dsh 升级后：基线是否漂移
+make smoke       # 安装态检查：~/.dsh 软链、渲染结果、AGENTS 块、preset 行
 make baseline    # 采纳新的 standard preset 基线
 make preset      # 重新生成 cordis.patch.yml
 ```
+
+`make smoke` 校验的是安装后的状态（`~/.dsh` 的稳定路径、每个 skill 软链、渲染后的 adapter 与 AGENTS.md 块、线上 profile 的 preset 行），不是仓库本身；仓库自查仍然用 `make check`。
 
 `make sync` 之后如果 `check` 报 `adapter has no row for <key>`，说明上游新增了 Cursor 名词：
 在 `adapter/dsh.md.in` 补一行，再 `make install`。上游自己的 CI 会对 Claude Code 适配器做同样的断言，

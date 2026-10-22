@@ -3,7 +3,7 @@ CACHE ?= $(HOME)/.cache/dsh-pstack/upstream
 PROFILE ?= $(or $(DSH_PROFILE),web)
 UPSTREAM ?= https://github.com/cursor/plugins
 
-.PHONY: all check check-preset install preset baseline sync clean
+.PHONY: all check check-preset smoke install preset baseline sync clean
 
 all: check install
 
@@ -14,6 +14,10 @@ check:
 # C. the shipped standard preset moved under us
 check-preset:
 	node preset/check.mjs
+
+# Installed state: stable path, skill links, rendered files, preset rows
+smoke:
+	node smoke.mjs
 
 install:
 	./install.sh
