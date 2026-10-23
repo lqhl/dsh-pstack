@@ -109,9 +109,12 @@ report it and fall back to the skill default.
 
 ## DSH-specific moves
 
-- **Panels.** When a skill says to spawn N candidates or reviewers on different models, use the `workflow`
-  tool and give each `agent()` call its own `provider` and `model`. One parent call, N children, no parent
-  context cost.
+- **Panels.** Use separate `subagent` calls when a panel requires a particular preset or reasoning budget.
+  Pass `provider`, `model`, and `reasoning_effort` from the role's alias on every call, and select the
+  skill's prescribed preset explicitly (`poteto-agent` for code, `readonly-worker` for read-only review).
+  Current `workflow` children accept provider/model but inherit the parent preset and cannot set effort.
+  If the operator explicitly chooses workflow, report that preset and effort guarantees are degraded;
+  do not claim the role's configured budget was applied.
 - **Loop.** `/loop until <predicate>` becomes `create_goal` for the predicate plus `schedule_create` for the
   heartbeat. Never write a shell `while` loop around the predicate.
 - **Todos.** Use `todo_write` for the playbook checklist, one item per step, and keep it current.

@@ -10,34 +10,43 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { extractStandardPlugins } from '../lib/standard-preset.mjs'
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const BASELINE = join(ROOT, 'vendor', 'baseline', 'standard.plugins.yml')
 const PROFILE = process.env.DSH_PROFILE || 'web'
+const DUMP_ARGS = ['--profile', PROFILE, '--dump-config']
 
-function liveStandard() {
-  const dump = execFileSync('dsh', ['--profile', PROFILE, '--dump-config'], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
-  const lines = dump.split('\n')
-  const start = lines.findIndex((line) => line.startsWith('- id: preset-standard'))
-  if (start < 0) throw new Error(`profile ${PROFILE} has no preset-standard row`)
-  const end = lines.findIndex((line, index) => index > start && line.startsWith('- id: preset-'))
-  const block = lines.slice(start, end < 0 ? undefined : end)
-  const plugins = block.findIndex((line) => line.trim() === 'plugins:')
-  if (plugins < 0) throw new Error('preset-standard has no plugins list')
-  return block
-    .slice(plugins + 1)
-    .filter((line) => line.trim() !== '')
-    .map((line) => (line.startsWith('      ') ? line.slice(6) : line))
-    .join('\n')
+function failureDetail(error) {
+  const stderr = error?.stderr?.toString().trim().split('\n')[0]
+  return stderr || error?.message || String(error)
 }
 
-if (!existsSync(BASELINE)) {
-  console.log(`FAIL missing ${BASELINE}; run make baseline`)
+function liveStandard() {
+  let dump
+  try {
+    dump = execFileSync('dsh', DUMP_ARGS, {
+      encoding: 'utf8',
+      maxBuffer: 64 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+  } catch (error) {
+    throw new Error(`cannot run \`dsh ${DUMP_ARGS.join(' ')}\`: ${failureDetail(error)}`)
+  }
+  return extractStandardPlugins(dump).text
+}
+
+let baseline
+let live
+try {
+  if (!existsSync(BASELINE)) throw new Error(`missing ${BASELINE}; run make baseline`)
+  baseline = readFileSync(BASELINE, 'utf8').replace(/\n+$/, '')
+  live = liveStandard()
+} catch (error) {
+  console.log(`FAIL ${error.message}`)
   process.exit(1)
 }
 
-const baseline = readFileSync(BASELINE, 'utf8').replace(/\n+$/, '')
-const live = liveStandard()
 if (baseline === live) {
   console.log(`preset base matches the live standard preset (profile ${PROFILE})`)
   process.exit(0)

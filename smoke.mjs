@@ -11,8 +11,9 @@
  */
 import { spawnSync } from 'node:child_process'
 import { existsSync, lstatSync, readFileSync, readdirSync, readlinkSync, realpathSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { renderTemplate, resolveDshHome, validateInstalledAgents } from './lib/agents.mjs'
 
 const ROOT = dirname(fileURLToPath(import.meta.url))
 const VENDOR = join(ROOT, 'vendor', 'pstack')
@@ -20,11 +21,9 @@ const SKILLS = join(VENDOR, 'skills')
 const ADAPTER_IN = join(ROOT, 'adapter', 'dsh.md.in')
 const FRAGMENT_IN = join(ROOT, 'agents-fragment.md.in')
 const PRESET_FILE = join(ROOT, 'preset', 'cordis.patch.yml')
-const DSH_HOME = resolve(process.env.DSH_HOME || join(process.env.HOME ?? '', '.dsh'))
+const DSH_HOME = resolveDshHome()
 const PROFILE = process.env.DSH_PROFILE || 'web'
 const PRESETS = ['pstack', 'poteto-agent', 'comment-sicko', 'readonly-worker']
-const BEGIN = '<!-- pstack:begin -->'
-const END = '<!-- pstack:end -->'
 
 const failures = []
 const fail = (message) => failures.push(message)
@@ -55,11 +54,7 @@ function realpathOrNull(path) {
 
 function renderForDshHome(path) {
   const text = readText(path)
-  return text === null ? null : text.split('{{DSH_HOME}}').join(DSH_HOME)
-}
-
-function trimTrailingNewlines(text) {
-  return text.replace(/\n+$/, '')
+  return text === null ? null : renderTemplate(text, DSH_HOME)
 }
 
 function firstDiffLine(expected, actual) {
@@ -71,18 +66,19 @@ function firstDiffLine(expected, actual) {
   return null
 }
 
-function countOccurrences(text, needle) {
-  return text.split(needle).length - 1
-}
-
 function expectedSkills() {
   if (!existsSync(SKILLS)) {
     fail(`vendored skills ${SKILLS}: missing; run make sync`)
     return null
   }
-  return readdirSync(SKILLS)
+  const names = readdirSync(SKILLS)
     .filter((name) => existsSync(join(SKILLS, name, 'SKILL.md')))
     .sort()
+  if (names.length === 0) {
+    fail(`vendored skills ${SKILLS}: empty; run make sync`)
+    return null
+  }
+  return names
 }
 
 function checkStablePath() {
@@ -160,8 +156,8 @@ function checkAdapter() {
 
 function checkAgentsBlock() {
   const path = join(DSH_HOME, 'AGENTS.md')
-  const expected = renderForDshHome(FRAGMENT_IN)
-  if (expected === null) {
+  const template = renderForDshHome(FRAGMENT_IN)
+  if (template === null) {
     fail(`AGENTS fragment ${FRAGMENT_IN}: missing; restore it from git`)
     return
   }
@@ -170,22 +166,10 @@ function checkAgentsBlock() {
     fail(`AGENTS block ${path}: file missing; run make install`)
     return
   }
-  const begins = countOccurrences(text, BEGIN)
-  const ends = countOccurrences(text, END)
-  if (begins !== 1 || ends !== 1) {
-    fail(`AGENTS block ${path}: found ${begins} begin and ${ends} end markers, expected one each; run make install`)
-    return
-  }
-  const start = text.indexOf(BEGIN)
-  const end = text.indexOf(END)
-  if (start > end) {
-    fail(`AGENTS block ${path}: begin marker comes after end marker; run make install`)
-    return
-  }
-  const wanted = trimTrailingNewlines(expected)
-  const found = trimTrailingNewlines(text.slice(start, end + END.length))
-  if (found !== wanted) {
-    fail(`AGENTS block ${path}: differs from ${FRAGMENT_IN} at block line ${firstDiffLine(wanted, found)}; run make install`)
+  try {
+    validateInstalledAgents(text, template)
+  } catch (error) {
+    fail(`AGENTS block ${path}: ${error.message}; run make install`)
   }
 }
 

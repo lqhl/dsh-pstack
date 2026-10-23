@@ -17,8 +17,11 @@ pstack 是 poteto（Lauren Tan）的一组 agent 工作流 skill：先想清楚�
 ├── preset/cordis.patch.yml 生成物：4 个 agent preset
 ├── agents-fragment.md.in  注入 ~/.dsh/AGENTS.md 的段落（模型角色表）
 ├── smoke.mjs              安装态检查：稳定路径 / 软链 / 渲染结果 / preset 行
-├── install.sh             建软链、渲染 adapter、注入 AGENTS.md
-└── Makefile               make / check / install / smoke / sync / baseline / preset
+├── install.sh             安装入口，调用 Node 安装器
+├── install.mjs            安全预检、生成 preset、安装链接与文件
+├── lib/                   AGENTS 段处理与 standard preset 提取
+├── tests/                 隔离安装与生成检查的回归测试
+└── Makefile               make / check / install / smoke / test / sync / baseline / preset
 ```
 
 ## 安装
@@ -27,14 +30,17 @@ pstack 是 poteto（Lauren Tan）的一组 agent 工作流 skill：先想清楚�
 make            # = make check && make install
 ```
 
-`make install` 做四件事，全部幂等：
+`make install` 先检查 AGENTS 标记和同名文件冲突，再做以下操作。发现损坏标记或不属于 pstack 的同名文件、目录或软链时会报错，保留已有内容。
 
-1. `~/.dsh/pstack` → 本仓库的 `vendor/pstack`（一个稳定路径，供适配表引用）
-2. `~/.dsh/skills/<name>` → `../pstack/skills/<name>`，57 个；上游删掉的 skill 会自动清掉软链
-3. 渲染 `~/.dsh/adapter/dsh.md`
-4. 把 `agents-fragment.md.in` 注入 `~/.dsh/AGENTS.md` 的 `<!-- pstack:begin -->` 块，块外内容不动
+1. 按当前 `DSH_HOME` 重新生成 `preset/cordis.patch.yml`，默认使用 `~/.dsh` 的绝对路径。
+2. `~/.dsh/pstack` → 本仓库的 `vendor/pstack`（一个稳定路径，供适配表引用）。
+3. `~/.dsh/skills/<name>` → `../pstack/skills/<name>`，数量从快照读取；清理已删除 skill 的 pstack 软链。
+4. 渲染 `~/.dsh/adapter/dsh.md`。
+5. 更新 `~/.dsh/AGENTS.md` 的 pstack 段，保留块外内容、已有角色模型和 `# budget`。
 
-preset 需要单独装一次（每个 profile 各一次）：
+安装需要 Bash 和 Node.js。自定义安装目录可运行 `DSH_HOME=/absolute/path make`。同一个 checkout 的 preset 生成物对应最后一次安装的目录；多个 DSH home 请使用各自的 checkout。
+
+preset 需要在执行 `make` 后单独装一次（每个 profile 各一次）：
 
 ```
 plugin_manager action=install_bundle target=<本仓库>/preset
@@ -65,8 +71,9 @@ plugin_manager action=install_bundle target=<本仓库>/preset
 ```bash
 make sync        # 拉上游 main，更新 vendor/pstack + vendor/UPSTREAM，然后跑 check
 make check       # A 词汇覆盖 / B 模型家族 / C skill 完整性
-make check-preset# dsh 升级后：基线是否漂移
+make check-preset # dsh 升级后：基线是否漂移
 make smoke       # 安装态检查：~/.dsh 软链、渲染结果、AGENTS 块、preset 行
+make test        # 临时目录中的安装与检查回归测试
 make baseline    # 采纳新的 standard preset 基线
 make preset      # 重新生成 cordis.patch.yml
 ```
@@ -83,8 +90,8 @@ make preset      # 重新生成 cordis.patch.yml
   它靠 persona 约束 + 适配表要求 `git status` 复核。真正的强制只读只有 plan mode。
 - 子代理默认深度 2：`poteto-agent` 自己没有委派工具，所以"子代理再开子代理"不会发生。
 - 没有 Cursor Automations / Bugbot / cloud agents；`automations/benny` 原样留在 vendor 里但不启用。
-- 单模型为主：`arena` / `interrogate` / `reflect` / `swarm` 的多模型交叉需要显式在 `workflow` 里
-  给每个 `agent()` 指定 `gpt`，否则是同一模型的多个独立上下文。
+- 多模型面板使用独立 `subagent` 调用，每席显式指定 provider、model、reasoning_effort 和 preset。
+  当前 `workflow` 只能选择 provider/model，会继承父 preset，无法指定推理预算。选择 workflow 时必须说明这项降级。
 
 ## 许可
 

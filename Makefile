@@ -1,9 +1,10 @@
 # Every target is safe to re-run. `make` alone checks the adapter and installs it.
 CACHE ?= $(HOME)/.cache/dsh-pstack/upstream
-PROFILE ?= $(or $(DSH_PROFILE),web)
+PROFILE := $(or $(PROFILE),$(DSH_PROFILE),web)
+export DSH_PROFILE := $(PROFILE)
 UPSTREAM ?= https://github.com/cursor/plugins
 
-.PHONY: all check check-preset smoke install preset baseline sync clean
+.PHONY: all check check-preset smoke test install preset baseline sync clean
 
 all: check install
 
@@ -18,6 +19,9 @@ check-preset:
 # Installed state: stable path, skill links, rendered files, preset rows
 smoke:
 	node smoke.mjs
+
+test:
+	node --test tests/*.test.mjs
 
 install:
 	./install.sh

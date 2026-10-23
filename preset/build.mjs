@@ -9,14 +9,16 @@
  */
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { homedir } from 'node:os'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { extractStandardPlugins } from '../lib/standard-preset.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = dirname(HERE)
 const BASELINE = join(ROOT, 'vendor', 'baseline', 'standard.plugins.yml')
 const OUT = join(HERE, 'cordis.patch.yml')
-const DSH_HOME = process.env.DSH_HOME || join(process.env.HOME ?? '', '.dsh')
+const DSH_HOME = resolve(process.env.DSH_HOME || join(homedir(), '.dsh'))
 const PROFILE = process.env.DSH_PROFILE || 'web'
 
 const bullets = (text, n) => {
@@ -151,7 +153,9 @@ function buildPstackPlugins(base) {
       '  config:',
       '    provider: spawn',
       '    toolName: subagent_readonly',
-      '    maxDepth: 0',
+      // maxDepth 0 blocks this top-level child; the readonly-worker preset
+      // mounts no delegation tool, so depth 1 still cannot fan out further.
+      '    maxDepth: 1',
       '    agentPreset: readonly-worker',
     ].join('\n'),
     4,
@@ -208,27 +212,29 @@ function buildReadonlyPlugins(base) {
   ].join('\n')
 }
 
-function refresh() {
-  const dump = execFileSync('dsh', ['--profile', PROFILE, '--dump-config'], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
-  const lines = dump.split('\n')
-  const start = lines.findIndex((line) => line.startsWith('- id: preset-standard'))
-  if (start < 0) throw new Error(`profile ${PROFILE} has no preset-standard row`)
-  const end = lines.findIndex((line, index) => index > start && line.startsWith('- id: preset-'))
-  const block = lines.slice(start, end < 0 ? undefined : end)
-  const plugins = block.findIndex((line) => line.trim() === 'plugins:')
-  if (plugins < 0) throw new Error('preset-standard has no plugins list')
-  const body = block
-    .slice(plugins + 1)
-    .filter((line) => line.trim() !== '')
-    .map((line) => (line.startsWith('      ') ? line.slice(6) : line))
-  mkdirSync(dirname(BASELINE), { recursive: true })
-  writeFileSync(BASELINE, `${body.join('\n')}\n`)
-  console.log(`baseline refreshed from profile ${PROFILE}: ${body.length} lines`)
+function failureDetail(error) {
+  const stderr = error?.stderr?.toString().trim().split('\n')[0]
+  return stderr || error?.message || String(error)
 }
 
-if (process.argv.includes('--refresh')) {
-  refresh()
-} else {
+function refresh() {
+  let dump
+  try {
+    dump = execFileSync('dsh', ['--profile', PROFILE, '--dump-config'], {
+      encoding: 'utf8',
+      maxBuffer: 64 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+  } catch (error) {
+    throw new Error(`cannot run \`dsh --profile ${PROFILE} --dump-config\`: ${failureDetail(error)}`)
+  }
+  const { lines } = extractStandardPlugins(dump)
+  mkdirSync(dirname(BASELINE), { recursive: true })
+  writeFileSync(BASELINE, `${lines.join('\n')}\n`)
+  console.log(`baseline refreshed from profile ${PROFILE}: ${lines.length} lines`)
+}
+
+function build() {
   if (!existsSync(BASELINE)) throw new Error(`missing ${BASELINE}; run node preset/build.mjs --refresh`)
   const base = readFileSync(BASELINE, 'utf8')
   const presets = [
@@ -286,4 +292,12 @@ if (process.argv.includes('--refresh')) {
   }
   writeFileSync(OUT, `${out.join('\n')}\n`)
   console.log(`wrote ${OUT} (${out.length} lines, ${presets.length} presets)`)
+}
+
+try {
+  if (process.argv.includes('--refresh')) refresh()
+  else build()
+} catch (error) {
+  console.error(`FAIL ${error.message}`)
+  process.exit(1)
 }
