@@ -1,17 +1,20 @@
 #!/usr/bin/env node
 /**
- * Build preset/cordis.patch.yml from the shipped `standard` preset plus the
+ * Build the agent-preset patch from the shipped `standard` preset plus the
  * pstack deltas. Keeping it generated makes the delta explicit and lets a DSH
  * upgrade refresh the base instead of hand-merging 150 lines.
  *
  *   node preset/build.mjs --refresh   # re-extract the base from the live profile
- *   node preset/build.mjs             # regenerate the patch
+ *   node preset/build.mjs             # regenerate the local patch
+ *
+ * `buildPatch('package')` produces the npm-bundle variant: personas read files
+ * inside the installed package and skill-filesystem points at ./skills.
  */
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { extractStandardPlugins } from '../lib/standard-preset.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -20,6 +23,8 @@ const BASELINE = join(ROOT, 'vendor', 'baseline', 'standard.plugins.yml')
 const OUT = join(HERE, 'cordis.patch.yml')
 const DSH_HOME = resolve(process.env.DSH_HOME || join(homedir(), '.dsh'))
 const PROFILE = process.env.DSH_PROFILE || 'web'
+const PACKAGE = JSON.parse(readFileSync(join(HERE, 'package.json'), 'utf8'))
+const PACKAGE_NAME = PACKAGE.name
 
 const bullets = (text, n) => {
   const lines = text.split('\n')
@@ -96,6 +101,47 @@ function persona(prefix) {
   ].join('\n')
 }
 
+function personaRow(prefix) {
+  return [
+    '- id: persona',
+    "  name: '@deepseek-ai/dsh-persona'",
+    '  config:',
+    `    prefix: ${prefix}`,
+  ].join('\n')
+}
+
+/** Resolve the installed package root at mount time. */
+function packageRootExpression() {
+  return [
+    "process.getBuiltinModule('node:path').join(",
+    "process.getBuiltinModule('node:path').dirname(",
+    `process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('${PACKAGE_NAME}/package.json')`,
+    "), 'skills')",
+  ].join('')
+}
+
+function personaExpression(file) {
+  return [
+    '!!js (() => { ',
+    "const path = process.getBuiltinModule('node:path'); ",
+    "const fs = process.getBuiltinModule('node:fs'); ",
+    "const { createRequire } = process.getBuiltinModule('node:module'); ",
+    `const root = path.dirname(createRequire(baseUrl).resolve('${PACKAGE_NAME}/package.json')); `,
+    `return fs.readFileSync(path.join(root, 'personas/${file}.md'), 'utf8').replaceAll('{{PSTACK_SKILLS}}', path.join(root, 'skills')) `,
+    '})()',
+  ].join('')
+}
+
+function skillFilesystemRow() {
+  return [
+    '- id: skill-filesystem',
+    "  name: '@deepseek-ai/dsh-skill-filesystem'",
+    '  config:',
+    '    customSkillDirs:',
+    `      - !!js ${packageRootExpression()}`,
+  ].join('\n')
+}
+
 const PSTACK_PERSONA = `
 You are a coding agent powered by the {{model}} model.
 
@@ -127,7 +173,11 @@ line for every claim about behavior, and say plainly when something is inferred
 rather than observed.
 `
 
-function buildPstackPlugins(base) {
+function personaFor(mode, file, local) {
+  return mode === 'package' ? personaRow(personaExpression(file)) : persona(local)
+}
+
+function buildPstackPlugins(base, mode) {
   const subagent = bullets(
     [
       '- id: tool-subagent',
@@ -162,13 +212,14 @@ function buildPstackPlugins(base) {
   )
 
   // persona is a top-level row; the delegation rows live inside the `delegation` group at indent 4.
-  let text = replaceEntry(base, 'persona', 0, persona(PSTACK_PERSONA))
+  let text = replaceEntry(base, 'persona', 0, personaFor(mode, 'pstack', PSTACK_PERSONA))
+  if (mode === 'package') text = replaceEntry(text, 'skill-filesystem', 0, skillFilesystemRow())
   text = replaceEntry(text, 'tool-subagent', 4, subagent)
   text = insertAfter(text, 'tool-subagent-fork', 4, readonlyTool)
   return text.replace(/\n+$/, '')
 }
 
-function buildDelegatePlugins(base) {
+function buildDelegatePlugins(base, mode) {
   const keep = [
     'agent-instructions',
     'time-context',
@@ -188,7 +239,9 @@ function buildDelegatePlugins(base) {
   const entries = new Map(splitEntries(base).map((entry) => [entry.id, entry]))
   const missing = keep.filter((id) => !entries.has(id))
   if (missing.length > 0) throw new Error(`the standard preset lost rows: ${missing.join(', ')}`)
-  return [persona(DELEGATE_PERSONA), ...keep.map((id) => entries.get(id).text)].join('\n')
+  const skillRow = mode === 'package' ? skillFilesystemRow() : entries.get('skill-filesystem').text
+  const rows = keep.map((id) => (id === 'skill-filesystem' ? skillRow : entries.get(id).text))
+  return [personaFor(mode, 'poteto-agent', DELEGATE_PERSONA), ...rows].join('\n')
 }
 
 function buildCommentSickoPlugins(base) {
@@ -202,10 +255,10 @@ function buildCommentSickoPlugins(base) {
   ].join('\n')
 }
 
-function buildReadonlyPlugins(base) {
+function buildReadonlyPlugins(base, mode) {
   const entries = new Map(splitEntries(base).map((entry) => [entry.id, entry]))
   return [
-    persona(READONLY_PERSONA),
+    personaFor(mode, 'readonly-worker', READONLY_PERSONA),
     entries.get('tool-fs').text,
     entries.get('tool-fs-search').text,
     entries.get('tool-todo').text,
@@ -217,7 +270,7 @@ function failureDetail(error) {
   return stderr || error?.message || String(error)
 }
 
-function refresh() {
+export function refresh() {
   let dump
   try {
     dump = execFileSync('dsh', ['--profile', PROFILE, '--dump-config'], {
@@ -234,7 +287,8 @@ function refresh() {
   console.log(`baseline refreshed from profile ${PROFILE}: ${lines.length} lines`)
 }
 
-function build() {
+/** @param {'local'|'package'} mode */
+export function buildPatch(mode = 'local') {
   if (!existsSync(BASELINE)) throw new Error(`missing ${BASELINE}; run node preset/build.mjs --refresh`)
   const base = readFileSync(BASELINE, 'utf8')
   const presets = [
@@ -243,14 +297,14 @@ function build() {
       name: 'pstack',
       description: 'Poteto mode: rigorous pstack workflows with per-role subagent models.',
       order: 10,
-      plugins: buildPstackPlugins(base),
+      plugins: buildPstackPlugins(base, mode),
     },
     {
       id: 'poteto-agent',
       name: 'poteto agent',
       description: 'pstack delegate for one scoped task. Cannot spawn further subagents.',
       order: 11,
-      plugins: buildDelegatePlugins(base),
+      plugins: buildDelegatePlugins(base, mode),
     },
     {
       id: 'comment-sicko',
@@ -264,21 +318,30 @@ function build() {
       name: 'readonly worker',
       description: 'Read-only investigator that reports evidence and never edits files.',
       order: 13,
-      plugins: buildReadonlyPlugins(base),
+      plugins: buildReadonlyPlugins(base, mode),
     },
   ]
 
-  const out = [
-    '# Generated by preset/build.mjs from vendor/baseline/standard.plugins.yml.',
-    '# Do not edit by hand: edit build.mjs, then run `make preset`.',
-    '#',
-    '# Delta against the shipped `standard` preset:',
-    '#   1. persona carries the poteto-mode bootstrap (read the entry skill, then the adapter).',
-    '#   2. tool-subagent selects a child preset, allows three, and raises depth to 2.',
-    '#   3. subagent_readonly mounts a read-only child preset.',
-    '#   4. four presets are declared: pstack, poteto-agent, comment-sicko, readonly-worker.',
-    '- insert:',
-  ]
+  const out = mode === 'package'
+    ? [
+        '# Generated by preset/build.mjs in package mode from vendor/baseline/standard.plugins.yml.',
+        '# Do not edit by hand: edit build.mjs, then run `make package`.',
+        '#',
+        '# Package mode: personas read files inside the installed package, and',
+        '# skill-filesystem points at the package skills directory.',
+        '- insert:',
+      ]
+    : [
+        '# Generated by preset/build.mjs from vendor/baseline/standard.plugins.yml.',
+        '# Do not edit by hand: edit build.mjs, then run `make preset`.',
+        '#',
+        '# Delta against the shipped `standard` preset:',
+        '#   1. persona carries the poteto-mode bootstrap (read the entry skill, then the adapter).',
+        '#   2. tool-subagent selects a child preset, allows three, and raises depth to 2.',
+        '#   3. subagent_readonly mounts a read-only child preset.',
+        '#   4. four presets are declared: pstack, poteto-agent, comment-sicko, readonly-worker.',
+        '- insert:',
+      ]
   for (const preset of presets) {
     out.push(`    - id: preset-${preset.id}`)
     out.push("      name: '@deepseek-ai/dsh-agent-preset'")
@@ -290,14 +353,22 @@ function build() {
     out.push('        plugins:')
     out.push(bullets(preset.plugins, 10))
   }
-  writeFileSync(OUT, `${out.join('\n')}\n`)
-  console.log(`wrote ${OUT} (${out.length} lines, ${presets.length} presets)`)
+  return `${out.join('\n')}\n`
 }
 
-try {
-  if (process.argv.includes('--refresh')) refresh()
-  else build()
-} catch (error) {
-  console.error(`FAIL ${error.message}`)
-  process.exit(1)
+function buildLocal() {
+  const patch = buildPatch('local')
+  writeFileSync(OUT, patch)
+  console.log(`wrote ${OUT} (${patch.split('\n').length - 1} lines, 4 presets)`)
+}
+
+const isMain = process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href
+if (isMain) {
+  try {
+    if (process.argv.includes('--refresh')) refresh()
+    else buildLocal()
+  } catch (error) {
+    console.error(`FAIL ${error.message}`)
+    process.exit(1)
+  }
 }

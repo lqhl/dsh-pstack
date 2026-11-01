@@ -3,7 +3,7 @@
 Read this file once per session, before the first skill step. It translates the Cursor names that pstack
 skills use into DSH tools.
 
-`<pstack>` is `{{DSH_HOME}}/pstack`. Every relative path inside a skill resolves against that skill's own
+`<pstack>` is `{{PSTACK_ROOT}}`. Every relative path inside a skill resolves against that skill's own
 directory (`<pstack>/skills/<name>/`), never against the session working directory.
 
 If a name has no row here, do not guess silently: use the closest row, say which mapping you assumed in one

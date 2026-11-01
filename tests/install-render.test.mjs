@@ -17,7 +17,11 @@ test(`install renders all destination paths literally for ${homeName}`, (t) => {
   assert.equal(result.status, 0, `install failed for a special-character DSH_HOME: ${outputOf(result)}`)
 
   const adapterTemplate = readFileSync(join(fixture.root, 'adapter', 'dsh.md.in'), 'utf8')
-  const expectedAdapter = adapterTemplate.split('{{DSH_HOME}}').join(fixture.home)
+  const expectedAdapter = adapterTemplate
+    .split('{{PSTACK_ROOT}}')
+    .join(`${fixture.home}/pstack`)
+    .split('{{DSH_HOME}}')
+    .join(fixture.home)
   const adapter = fixture.readHome('adapter/dsh.md')
   assert.equal(adapter, expectedAdapter, 'installed adapter is not the template rendered with DSH_HOME')
   assert.ok(adapter.includes(`${fixture.home}/pstack`), 'adapter does not reference the destination pstack path')
