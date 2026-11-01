@@ -13,18 +13,40 @@ pstack 是 poteto（Lauren Tan）的一组 agent 工作流 skill：先想清楚�
 ├── adapter/dsh.md.in      适配表：把 pstack 里的 Cursor 名词翻成 DSH（安装时渲染）
 ├── adapter/check.mjs      漂移检查：词汇覆盖 + 模型家族 + skill 完整性
 ├── preset/build.mjs       由基线 + pstack 差异生成 preset/cordis.patch.yml
+├── preset/package.mjs     生成 dist/：npm bundle 的 package-mode patch 与文件布局
+├── preset/package.json    bundle manifest；发 npm 时去掉 private
+├── preset/personas/       包内 persona，按包路径读取
+├── preset/locale/         Plugins 页的标题与描述
+├── preset/icon.svg        Plugins 页图标
+├── preset/README.md       npm 包 README
 ├── preset/check.mjs       检查 C 项：线上 standard preset 是否变了
-├── preset/cordis.patch.yml 生成物：4 个 agent preset
+├── preset/cordis.patch.yml 生成物：4 个 agent preset（本地安装用）
 ├── agents-fragment.md.in  注入 ~/.dsh/AGENTS.md 的段落（模型角色表）
 ├── smoke.mjs              安装态检查：稳定路径 / 软链 / 渲染结果 / preset 行
 ├── install.sh             安装入口，调用 Node 安装器
 ├── install.mjs            安全预检、生成 preset、安装链接与文件
 ├── lib/                   AGENTS 段处理与 standard preset 提取
-├── tests/                 隔离安装与生成检查的回归测试
-└── Makefile               make / check / install / smoke / test / sync / baseline / preset
+├── tests/                 隔离安装、生成检查与 npm 包布局的回归测试
+├── dist/                  make package 的生成物（gitignore）
+└── Makefile               make / check / install / package / smoke / test / sync
 ```
 
-## 安装
+## 安装（npm bundle）
+
+DSH 的 Plugins 页搜索 `@lqhl/dsh-pstack`，安装后新会话选择 `pstack` preset。或者：
+
+```
+plugin_manager action=install_bundle target=@lqhl/dsh-pstack
+```
+
+bundle 把 57 个 pstack skill 和 2 个辅助 skill 放在包里，preset 的 `skill-filesystem` 用 `customSkillDirs` 指向包内的 `skills/`。
+所以 skill 只出现在选了 `pstack` preset 的会话里，`standard` preset 不会多出 `/poteto-mode`。
+要在任何 preset 里用 `/poteto-mode`，走下面的本地安装。
+
+包版本由 `preset/package.json` 控制，`engines.dsh` 当前是 `^0.2.1-rc.5`。
+`standard` preset 的插件表变了就要重新生成并重发。
+
+## 本地开发安装
 
 ```bash
 make            # = make check && make install
@@ -48,7 +70,8 @@ plugin_manager action=install_bundle target=<本仓库>/preset
 
 ## 用法
 
-- **按需**：`/poteto-mode 给 X 加一个 --json flag，verify 两边`。skills 全在 `/` 菜单里。
+- **按需**：在 `pstack` preset 的会话里输入 `/poteto-mode 给 X 加一个 --json flag，verify 两边`。
+  npm bundle 的 skills 只在这个 preset 里可见；本地安装把它们放进 `~/.dsh/skills`，所有 preset 都能用。
 - **常驻**：新会话选择 agent preset `pstack`。它在 persona 里要求先读 `poteto-mode/SKILL.md` 和适配表，
   等价于 Cursor 的 custom mode。
 - **子代理类型**：`poteto-agent`、`comment-sicko`、`readonly-worker` 三个 preset 通过
@@ -73,10 +96,26 @@ make sync        # 拉上游 main，更新 vendor/pstack + vendor/UPSTREAM，然
 make check       # A 词汇覆盖 / B 模型家族 / C skill 完整性
 make check-preset # dsh 升级后：基线是否漂移
 make smoke       # 安装态检查：~/.dsh 软链、渲染结果、AGENTS 块、preset 行
-make test        # 临时目录中的安装与检查回归测试
+make test        # 临时目录中的安装、生成与 npm 包布局回归测试
 make baseline    # 采纳新的 standard preset 基线
-make preset      # 重新生成 cordis.patch.yml
+make preset      # 重新生成本地安装用的 cordis.patch.yml
+make package     # 生成 dist/：package-mode patch、skills、personas、locale、icon、许可
+make pack        # make package，然后把 tarball 打到 dist/
+make publish-dry # 校验 npm 发布内容，不真正发布
 ```
+
+`make package` 生成 npm bundle，不碰本地安装用的 `preset/cordis.patch.yml`。
+发布前跑 `make check test package`，再检查 `npm pack` 的文件列表。
+
+`npm publish` 需要 npmjs.org 的登录。默认 registry 是镜像时，先登录再发布：
+
+```bash
+npm login --registry=https://registry.npmjs.org
+cd dist && npm publish --access public --registry=https://registry.npmjs.org
+```
+
+`preset/package.json` 里的 `publishConfig` 已经写了 public access 和 npmjs.org，所以 `npm publish` 也可以不带参数。
+不要在仓库根目录直接跑 `npm publish dist`。`dist` 会被当成包名解析。先 `cd dist`，或者写 `npm publish ./dist`。
 
 `make smoke` 校验的是安装后的状态（`~/.dsh` 的稳定路径、每个 skill 软链、渲染后的 adapter 与 AGENTS.md 块、线上 profile 的 preset 行），不是仓库本身；仓库自查仍然用 `make check`。
 
