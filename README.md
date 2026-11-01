@@ -107,15 +107,52 @@ make publish-dry # 校验 npm 发布内容，不真正发布
 `make package` 生成 npm bundle，不碰本地安装用的 `preset/cordis.patch.yml`。
 发布前跑 `make check test package`，再检查 `npm pack` 的文件列表。
 
-`npm publish` 需要 npmjs.org 的登录。默认 registry 是镜像时，先登录再发布：
+### 发布到官方 registry
+
+默认 registry 是镜像不影响发布。`preset/package.json` 的 `publishConfig.registry` 已经指向
+`https://registry.npmjs.org`，镜像只用于安装。登录要单独指向官方 registry：
 
 ```bash
 npm login --registry=https://registry.npmjs.org
+npm whoami --registry=https://registry.npmjs.org
+```
+
+`npm whoami` 返回的用户必须能发布 `@lqhl` scope。不是的话，把 `preset/package.json` 的 `name`
+改成你的 scope，构建会把它带进 persona 和 `customSkillDirs` 表达式。
+
+第一次发布必须手动做。npm 的 Trusted Publishing 是包级别的，包还不存在时 CI 无法用 OIDC 创建它：
+
+```bash
+make package
 cd dist && npm publish --access public --registry=https://registry.npmjs.org
 ```
 
-`preset/package.json` 里的 `publishConfig` 已经写了 public access 和 npmjs.org，所以 `npm publish` 也可以不带参数。
-不要在仓库根目录直接跑 `npm publish dist`。`dist` 会被当成包名解析。先 `cd dist`，或者写 `npm publish ./dist`。
+不要在仓库根目录跑 `npm publish dist`。`dist` 会被当成包名解析。先 `cd dist`，或者写 `npm publish ./dist`。
+
+发过一次后，在 <https://www.npmjs.com/package/@lqhl/dsh-pstack/access> 的 Trusted Publishing 里加
+GitHub Actions：owner `lqhl`，repository `dsh-pstack`，workflow `ci.yml`，environment 留空。
+
+### CI 发布
+
+`.github/workflows/ci.yml` 在 Node 22 和 24 上跑 `make check`、`make test`、`make package`。
+`v*` tag 触发 `publish` job：校验 tag 和 `preset/package.json` 的 version 一致，
+再用 `npm publish --provenance --access public` 发到官方 registry。
+OIDC 由 `id-token: write` 权限和 npmjs.com 的 Trusted Publisher 配置共同启用，不需要 `NPM_TOKEN`。
+provenance 需要公开仓库。
+
+发布一个新版本。`preset/package.json` 的 `version` 必须和 tag 一致：
+
+```bash
+# 改 preset/package.json 的 version，提交
+git tag v0.1.1
+git push origin v0.1.1
+```
+
+0.1.0 已经手动发过的话，第一个 CI tag 用 0.1.1。CI 再发 0.1.0 会被 npm 以版本已存在拒绝。
+如果用 `NPM_TOKEN` 让 CI 发第一次，0.1.0 可以直接打 tag。
+
+第一次如果不想手动，也可以在 repo secrets 里放 `NPM_TOKEN`，给 publish step 加
+`NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}`，发完第一次再换成 Trusted Publisher。
 
 `make smoke` 校验的是安装后的状态（`~/.dsh` 的稳定路径、每个 skill 软链、渲染后的 adapter 与 AGENTS.md 块、线上 profile 的 preset 行），不是仓库本身；仓库自查仍然用 `make check`。
 
