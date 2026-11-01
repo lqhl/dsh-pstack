@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "dsh-pstack",
+    "description": "在 DeepSeek Harness 上运行 pstack（poteto mode）的 skills、工作流与 agent presets。"
+  }
+}

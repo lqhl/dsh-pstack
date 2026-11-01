@@ -3,12 +3,51 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Agent presets for running pstack (poteto mode) inside DeepSeek Harness",
+  "description": "Poteto mode: pstack skills, workflows, and agent presets for DeepSeek Harness.",
   "license": "MIT",
+  "files": [
+    "cordis.patch.yml",
+    "skills",
+    "personas",
+    "locale/*.json",
+    "icon.svg",
+    "licenses",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md",
+    "README.md"
+  ],
+  "exports": {
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
   "dsh": {
     "manifestVersion": 1,
     "bundle": {
       "patch": "./cordis.patch.yml"
     }
-  }
+  },
+  "engines": {
+    "dsh": "^0.2.1-rc.5"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lqhl/dsh-pstack.git"
+  },
+  "homepage": "https://github.com/lqhl/dsh-pstack",
+  "bugs": {
+    "url": "https://github.com/lqhl/dsh-pstack/issues"
+  },
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "pstack",
+    "poteto-mode",
+    "agent-presets"
+  ]
 }

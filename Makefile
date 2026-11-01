@@ -4,7 +4,7 @@ PROFILE := $(or $(PROFILE),$(DSH_PROFILE),web)
 export DSH_PROFILE := $(PROFILE)
 UPSTREAM ?= https://github.com/cursor/plugins
 
-.PHONY: all check check-preset smoke test install preset baseline sync clean
+.PHONY: all check check-preset smoke test install preset baseline sync clean package pack publish-dry
 
 all: check install
 
@@ -29,6 +29,18 @@ install:
 # Regenerate preset/cordis.patch.yml from vendor/baseline/standard.plugins.yml
 preset:
 	node preset/build.mjs
+
+# Stage the publishable npm bundle in dist/
+package:
+	node preset/package.mjs
+
+# Pack the staged bundle without contacting the registry
+pack: package
+	cd dist && npm_config_cache=$(CURDIR)/.cache/npm npm pack
+
+# Validate the publish payload without publishing
+publish-dry: package
+	cd dist && npm_config_cache=$(CURDIR)/.cache/npm npm publish --dry-run
 
 # Refresh that baseline from the live profile after a DSH upgrade
 baseline:
@@ -56,4 +68,4 @@ sync:
 	$(MAKE) check
 
 clean:
-	rm -rf .cache-composed.yml
+	rm -rf .cache-composed.yml dist
