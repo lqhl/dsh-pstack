@@ -17,12 +17,13 @@ function buildPackage(t) {
 test('the package manifest is publishable', (t) => {
   const fixture = buildPackage(t)
   const manifest = JSON.parse(fixture.readRepo('dist/package.json'))
+  const source = JSON.parse(fixture.readRepo('preset/package.json'))
 
-  assert.equal(manifest.name, '@lqhl/dsh-pstack')
-  assert.equal(manifest.version, '0.1.0')
+  assert.equal(manifest.name, source.name, 'dist name drifted from preset/package.json')
+  assert.equal(manifest.version, source.version, 'dist version drifted from preset/package.json')
   assert.equal(manifest.private, undefined, 'dist manifest still carries private')
   assert.equal(manifest.dsh.bundle.patch, './cordis.patch.yml')
-  assert.equal(manifest.engines.dsh, '^0.2.1-rc.5')
+  assert.equal(manifest.engines.dsh, source.engines.dsh, 'dist engines.dsh drifted from preset/package.json')
   assert.equal(manifest.publishConfig.access, 'public')
   assert.equal(manifest.publishConfig.registry, 'https://registry.npmjs.org')
   assert.equal(manifest.exports['./package.json'], './package.json', 'package.json must stay exported')
