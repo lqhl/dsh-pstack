@@ -92,6 +92,27 @@ test('the package ships its skills, helper skills, personas, and display assets'
   assert.ok(readFileSync(dist('licenses/pstack-LICENSE'), 'utf8').includes('MIT'))
 })
 
+function parsePackOutput(stdout) {
+  const firstArray = stdout.indexOf('[')
+  const firstObject = stdout.indexOf('{')
+  const start = firstArray >= 0 && (firstObject < 0 || firstArray < firstObject) ? firstArray : firstObject
+  const end = start === firstArray ? stdout.lastIndexOf(']') : stdout.lastIndexOf('}')
+  if (start < 0 || end <= start) throw new Error(`npm pack printed no JSON: ${stdout}`)
+  const parsed = JSON.parse(stdout.slice(start, end + 1))
+  return Array.isArray(parsed) ? parsed[0] : Object.values(parsed)[0]
+}
+
+test('parses both npm pack JSON shapes', () => {
+  const packageObject = {
+    name: '@lqhl/dsh-pstack',
+    files: [{ path: 'package.json' }, { path: 'cordis.patch.yml' }],
+  }
+  assert.equal(parsePackOutput(JSON.stringify([packageObject])).files[0].path, 'package.json')
+  assert.equal(parsePackOutput(`npm notice\ntarball\n${JSON.stringify([packageObject])}\n`).files[0].path, 'package.json')
+  const byName = { '@lqhl/dsh-pstack': packageObject }
+  assert.equal(parsePackOutput(JSON.stringify(byName)).files[1].path, 'cordis.patch.yml')
+})
+
 test('npm pack includes the bundle files', (t) => {
   const fixture = buildPackage(t)
   const result = spawnSync('npm', ['pack', '--dry-run', '--json'], {
@@ -102,12 +123,7 @@ test('npm pack includes the bundle files', (t) => {
   })
   assert.equal(result.status, 0, `npm pack failed: ${outputOf(result)}`)
 
-  const stdout = result.stdout
-  const start = stdout.indexOf('{')
-  const end = stdout.lastIndexOf('}')
-  assert.ok(start >= 0 && end > start, `npm pack printed no JSON: ${stdout}`)
-  const parsed = JSON.parse(stdout.slice(start, end + 1))
-  const packed = Array.isArray(parsed) ? parsed[0] : Object.values(parsed)[0]
+  const packed = parsePackOutput(result.stdout)
   const files = packed.files.map((entry) => entry.path)
 
   for (const required of [
