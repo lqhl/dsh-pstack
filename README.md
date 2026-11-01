@@ -39,7 +39,7 @@ DSH 的 Plugins 页搜索 `@lqhl/dsh-pstack`，安装后新会话选择 `pstack`
 plugin_manager action=install_bundle target=@lqhl/dsh-pstack
 ```
 
-bundle 把 57 个 pstack skill 和 2 个辅助 skill 放在包里，preset 的 `skill-filesystem` 用 `customSkillDirs` 指向包内的 `skills/`。
+bundle 把 58 个 pstack skill 和 2 个辅助 skill 放在包里，preset 的 `skill-filesystem` 用 `customSkillDirs` 指向包内的 `skills/`。
 所以 skill 只出现在选了 `pstack` preset 的会话里，`standard` preset 不会多出 `/poteto-mode`。
 要在任何 preset 里用 `/poteto-mode`，走下面的本地安装。
 
