@@ -100,3 +100,12 @@ test('family check ignores agent names and ordinary hyphenated prose', (t) => {
   const result = fixture.runNode('adapter/check.mjs')
   assert.equal(result.status, 0, `check flagged non-model names: ${outputOf(result)}`)
 })
+
+test('family check ignores the Pele renderer and its CSS variables', (t) => {
+  const fixture = adapterFixture(t, {
+    adapter: COMPLETE_ADAPTER,
+    body: 'Render with `pele@1.9.0` and set the `--pele-*` CSS variables.',
+  })
+  const result = fixture.runNode('adapter/check.mjs')
+  assert.equal(result.status, 0, `check flagged the Pele renderer: ${outputOf(result)}`)
+})

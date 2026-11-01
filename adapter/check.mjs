@@ -65,7 +65,8 @@ const adapter = readFileSync(ADAPTER, 'utf8')
 // B. Model families.
 const KNOWN_FAMILIES = ['cursor-grok', 'composer', 'claude', 'grok', 'gpt', 'deepseek']
 const KNOWN_BY_LENGTH = [...KNOWN_FAMILIES].sort((left, right) => right.length - left.length)
-const NEUTRAL_FAMILY = /^(?:principle|verify|incident|sev|setup-pstack)(?:-|$)/
+// Pele is the Mermaid renderer used by the statechart skill, not a model family.
+const NEUTRAL_FAMILY = /^(?:principle|verify|incident|sev|setup-pstack|pele)(?:-|$)/
 const ALIAS_HEADER = /^\|\s*alias\s*\|\s*provider\s*\|\s*model\s*\|\s*reasoning_effort\s*\|\s*$/
 const MAPPING_HEADER = /^\|\s*pstack slug\s*\|\s*alias\s*\|\s*$/
 const KNOWN_MODEL = /(?:^|[^a-z0-9_-])((?:cursor-grok|composer|claude|grok|gpt|deepseek))-(?=[a-z0-9*])/gi
