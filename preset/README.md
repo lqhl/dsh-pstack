@@ -27,7 +27,7 @@ The defaults are in the `pstack-models` skill. To change a role, run `/setup-pst
 
 ## Compatibility and limits
 
-- The package needs DSH 0.2.1-rc.5 or a compatible 0.2.x release.
+- The package needs DSH 0.2.2-rc.1 or a later 0.2.x release. On 0.2.2-rc.1, `@deepseek-ai/dsh-tool-subagent-control` registers `list_agents`. On 0.2.1, that tool is the separate `@deepseek-ai/dsh-tool-subagent-control/list-agents` plugin, which 0.2.2-rc.1 does not export.
 - Skills load only in sessions that select the `pstack` preset. The shipped `standard` preset does not get `/poteto-mode`.
 - The presets copy the shipped `standard` plugin list. A DSH change to that list needs a new package release.
 - Cursor-only features are skipped. The adapter skill lists the exact mappings.

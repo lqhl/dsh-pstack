@@ -97,6 +97,30 @@ test('the generated readonly delegation tool allows its first child', (t) => {
   assert.match(block, /maxDepth:\s*1\b/, `subagent-readonly should cap depth at 1, not block its first child:\n${block}`)
 })
 
+test('the generated preset omits the retired list-agents subpath plugin', (t) => {
+  const fixture = createFixture(t)
+  const baseline = fixture.readRepo('vendor/baseline/standard.plugins.yml')
+  const control = [
+    '    - id: tool-subagent-control',
+    "      name: '@deepseek-ai/dsh-tool-subagent-control'",
+  ].join('\n')
+  const retired = [
+    '    - id: tool-subagent-list-agents',
+    "      name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'",
+  ].join('\n')
+  assert.ok(baseline.includes(control), 'fixture baseline lost tool-subagent-control')
+  fixture.writeRepo('vendor/baseline/standard.plugins.yml', baseline.replace(control, `${control}\n${retired}`))
+
+  const result = fixture.runNode('preset/build.mjs')
+  assert.equal(result.status, 0, `preset build failed: ${outputOf(result)}`)
+  const patch = fixture.readRepo('preset/cordis.patch.yml')
+
+  assert.equal(patch.includes('tool-subagent-list-agents'), false, `generated preset kept the retired id:\n${patch}`)
+  assert.equal(patch.includes('@deepseek-ai/dsh-tool-subagent-control/list-agents'), false, `generated preset kept the retired subpath:\n${patch}`)
+  assert.match(rowBlock(patch, 'tool-subagent-control'), /name: '@deepseek-ai\/dsh-tool-subagent-control'/)
+  assert.match(rowBlock(patch, 'tool-subagent'), /name: '@deepseek-ai\/dsh-tool-subagent'/)
+})
+
 test('the generated preset references the destination home, not HOME', (t) => {
   const fixture = createFixture(t, { homeName: 'destination & home | path' })
   const result = fixture.runNode('preset/build.mjs')

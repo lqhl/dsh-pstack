@@ -43,7 +43,8 @@ bundle 把 58 个 pstack skill 和 2 个辅助 skill 放在包里，preset 的 `
 所以 skill 只出现在选了 `pstack` preset 的会话里，`standard` preset 不会多出 `/poteto-mode`。
 要在任何 preset 里用 `/poteto-mode`，走下面的本地安装。
 
-包版本由 `preset/package.json` 控制，`engines.dsh` 当前是 `^0.2.1-rc.5`。
+包版本由 `preset/package.json` 控制，`engines.dsh` 当前是 `^0.2.2-rc.1`。
+DSH 0.2.2-rc.1 由主插件 `@deepseek-ai/dsh-tool-subagent-control` 注册 `list_agents`，并停止导出 `/list-agents`。DSH 0.2.1 的主插件只注册 `send_message` 和 `interrupt_agent`，`list_agents` 仍在那个子路径上，所以这一版要求 0.2.2-rc.1。
 `standard` preset 的插件表变了就要重新生成并重发。
 
 ## 本地开发安装

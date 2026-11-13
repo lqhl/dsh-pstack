@@ -77,6 +77,51 @@ function insertAfter(text, id, indent, block) {
   return lines.join('\n')
 }
 
+/**
+ * DSH 0.2.2 registers `list_agents` from `@deepseek-ai/dsh-tool-subagent-control`
+ * and stops exporting `./list-agents`. DSH 0.2.1 kept that tool on a standalone
+ * `tool-subagent-list-agents` row. Drop the row at build time so a baseline that
+ * still contains it cannot emit the unexported subpath.
+ */
+const RETIRED_LIST_AGENTS_ID = 'tool-subagent-list-agents'
+const RETIRED_LIST_AGENTS_PACKAGE = '@deepseek-ai/dsh-tool-subagent-control/list-agents'
+
+function omitPluginId(text, id) {
+  let current = text
+  for (;;) {
+    const lines = current.split('\n')
+    const header = lines.find((line) => line.trim() === `- id: ${id}`)
+    if (header === undefined) return current
+    const indent = header.match(/^ */)[0].length
+    const range = findEntry(lines, id, indent)
+    if (!range) return current
+    lines.splice(range.start, range.end - range.start)
+    current = lines.join('\n')
+  }
+}
+
+function omitRetiredListAgents(text) {
+  let current = omitPluginId(text, RETIRED_LIST_AGENTS_ID)
+  if (!current.includes(RETIRED_LIST_AGENTS_PACKAGE)) return current
+  const lines = current.split('\n')
+  const nameIndex = lines.findIndex((line) => line.includes(RETIRED_LIST_AGENTS_PACKAGE))
+  let start = nameIndex
+  while (start >= 0 && !/^- id: \S/.test(lines[start].trim())) start -= 1
+  if (start < 0) throw new Error(`retired list-agents package has no plugin id at line ${nameIndex + 1}`)
+  const id = lines[start].trim().slice('- id: '.length)
+  current = omitPluginId(current, id)
+  if (current.includes(RETIRED_LIST_AGENTS_PACKAGE) || current.includes(RETIRED_LIST_AGENTS_ID)) {
+    throw new Error('baseline still references the retired list-agents plugin after removal')
+  }
+  return current
+}
+
+function assertNoRetiredListAgents(patch) {
+  if (patch.includes(RETIRED_LIST_AGENTS_ID) || patch.includes(RETIRED_LIST_AGENTS_PACKAGE)) {
+    throw new Error('generated preset still references the retired list-agents plugin')
+  }
+}
+
 
 function commentSicko() {
   const path = join(ROOT, 'vendor', 'pstack', 'agents', 'comment-sicko.md')
@@ -290,7 +335,7 @@ export function refresh() {
 /** @param {'local'|'package'} mode */
 export function buildPatch(mode = 'local') {
   if (!existsSync(BASELINE)) throw new Error(`missing ${BASELINE}; run node preset/build.mjs --refresh`)
-  const base = readFileSync(BASELINE, 'utf8')
+  const base = omitRetiredListAgents(readFileSync(BASELINE, 'utf8'))
   const presets = [
     {
       id: 'pstack',
@@ -353,7 +398,9 @@ export function buildPatch(mode = 'local') {
     out.push('        plugins:')
     out.push(bullets(preset.plugins, 10))
   }
-  return `${out.join('\n')}\n`
+  const patch = `${out.join('\n')}\n`
+  assertNoRetiredListAgents(patch)
+  return patch
 }
 
 function buildLocal() {
