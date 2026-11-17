@@ -1,6 +1,6 @@
 repo: cursor/plugins
-commit: ae5650febf4320793844c12c4adaa937f417f8da
+commit: e1cc03121a0e71129a4fb730d7c5528a0a3e43c8
 tag: none
-plugin_version: 0.15.36
+plugin_version: 0.15.43
 path: pstack
-synced_at: 2026-11-01
+synced_at: 2026-11-17

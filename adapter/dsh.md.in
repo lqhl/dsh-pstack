@@ -56,7 +56,7 @@ Two aliases cover every pstack slug. Never pass a Cursor slug as a DSH model id.
 | pstack slug | alias |
 | --- | --- |
 | `claude-*`, such as `claude-opus-5-5-xhigh` | `gpt` |
-| `gpt-*` | `gpt` |
+| `gpt-*`, `gemini-*` | `gpt` |
 | `grok-*`, `composer-*`, `cursor-grok-*` | `deepseek` |
 | `deepseek-*` | `deepseek` |
 | `inherit-parent` or `auto` | omit `provider` and `model`, so the child joins the parent route |
